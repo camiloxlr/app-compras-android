@@ -1,4 +1,4 @@
-package com.example.appcompras
+package com.example.appcompras.ui
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -7,13 +7,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.*
@@ -23,14 +23,16 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.appcompras.model.ItemData
+import com.example.appcompras.model.RequestStatus
 import com.example.appcompras.ui.theme.AppComprasTheme
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,13 +51,8 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GroceryListScreen() {
-    val items = remember {
-        mutableStateListOf(
-            ItemData("Maçã", false, 0),
-            ItemData("Banana", false, 1),
-        )
-    }
+fun GroceryListScreen(viewModel: MainViewModel = androidx.lifecycle.viewmodel.compose.viewModel()) {
+    val data = viewModel.state
 
     var newItem by remember { mutableStateOf((""))}
 
@@ -63,7 +60,8 @@ fun GroceryListScreen() {
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
-            .background(Color.White)
+            .background(Color.White),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         TopAppBar (
             title = { Text(text = "Lista de Compras", color = Color.Black) },
@@ -76,37 +74,40 @@ fun GroceryListScreen() {
             newItem,
             onNewItemChange = {
                 newItem = it
-                println("MainActivity::newItemChanged:$it")
             },
             onAddItemClick = {
-                println("MainActivity::addItem:$newItem")
                 if (newItem.isNotBlank()) {
-                    items.add(ItemData(newItem, false, items.size))
+                    viewModel.addItem(newItem)
                     newItem = ""
                 }
             }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        LoadingProgressBar(data.value.isLoading)
         
         GroceryListSection(
-            items,
+            data,
             onItemCheckedChanged = {
-                val index = items.indexOf(it)
-                if (index != -1) {
-                    val updatedItems = items.toMutableList()
-                    updatedItems[index].checked = !updatedItems[index].checked
-                    items.clear()
-                    items.addAll(updatedItems)
-                }
+                viewModel.updateItem(it)
+
             },
             onItemClick = {
-                items.remove(it)
+                viewModel.removeItem(it)
             }
         )
     }
 }
 
+@Composable
+fun LoadingProgressBar(isLoading: Boolean) {
+    if (isLoading) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(48.dp).padding(16.dp)
+        )
+    }
+}
 
 @Composable
 fun InputSection(
@@ -145,13 +146,17 @@ fun InputSection(
 }
 
 @Composable
-fun GroceryListSection(list: List<ItemData>, onItemCheckedChanged: (ItemData) -> Unit, onItemClick: (ItemData) -> Unit) {
+fun GroceryListSection(
+    list: State<RequestStatus>,
+    onItemCheckedChanged: (ItemData) -> Unit,
+    onItemClick: (ItemData) -> Unit
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
     ) {
-        items(list.size) { index ->
-            GroceryItemCard(list[index], onItemCheckedChanged, onItemClick)
+        items(list.value.data) { item ->
+            GroceryItemCard(item, onItemCheckedChanged, onItemClick)
         }
     }
 }
